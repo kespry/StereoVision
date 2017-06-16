@@ -7,8 +7,9 @@ To install, follow these steps:
  	```python
  	conda env create -f environment.yml
  	```
- 3. ```python setup.py build```
- 4. ```python setup.py install```
+ 3. ```source activate StereoCamera```
+ 4. ```python setup.py build```
+ 5. ```python setup.py install```
 
 I've included a folder with test images to make sure everything is working correctly in ```/test_images```. I got the test images from [here](https://github.com/sourishg/stereo-calibration/tree/master/calib_imgs).
 
