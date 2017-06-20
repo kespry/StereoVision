@@ -21,7 +21,7 @@ setup(name="StereoVision",
       version="1.0.3",
       description=("Library and utilities for 3d reconstruction from stereo "
                    "cameras."),
-      long_description=open("README.rst").read(),
+      long_description=open("~README.rst").read(),
       author="Daniel Lee",
       author_email="lee.daniel.1986@gmail.com",
       packages=["stereovision"],
