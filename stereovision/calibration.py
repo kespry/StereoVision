@@ -27,7 +27,7 @@ Classes:
 """
 
 import os
-
+from fractions import gcd
 import cv2
 
 import numpy as np
@@ -148,15 +148,79 @@ class StereoCalibrator(object):
 
     def _get_corners(self, image):
         """Find subpixel chessboard corners in image."""
+        
+        #convert image to black and white
         temp = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        ret, corners = cv2.findChessboardCorners(temp,
-                                                 (self.rows, self.columns))
+
+        #if necessary, resize the image for display on screen and to reduce initial guess time
+        temp_resized, scale = self._resize_image(temp, scaling = 5)
+
+        #use quick check of image corners to get initial guess
+        ret, corners = cv2.findChessboardCorners(temp_resized,
+                                                 (self.rows, self.columns), None, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
+        + cv2.CALIB_CB_FAST_CHECK)
         if not ret:
             raise ChessboardNotFoundError("No chessboard could be found.")
+
+        #rescale corners using applied resizing scale
+        corners = corners*scale #[c*scale for c in corners]
+
+        #temporarily suppres to check improvement in speed
         cv2.cornerSubPix(temp, corners, (11, 11), (-1, -1),
                          (cv2.TERM_CRITERIA_MAX_ITER + cv2.TERM_CRITERIA_EPS,
                           30, 0.01))
         return corners
+
+    def _resize_image(self, image, scaling = None, max_pix_dim = 800):
+        """
+        Resize image to a smaller size based on max_pix_dim
+        (max number of pixels in any dimension)
+        """
+        temp = image
+        #get x and y dimensions of the image
+        px, py = temp.shape[:2]
+
+        #check if the image is already small enough
+        if max(px,py) < max_pix_dim:
+            #if the image doesn't need any scaling, return it unmodified
+            return temp
+
+        #check that the dimensions aren't prime numbers or something
+        max_scaling = gcd(px,py)
+        if max_scaling < 2:
+            print('WARNING: Cannot scale images. GCD of x and y pixel dimensions is 1.')
+            return temp
+
+        #reduce scale to something that actually fits on the screen...
+        #find scaling factor closest to initial guess that evenly divides
+        #both px and py
+        if scaling is None:
+            scaling = int(max([max_pix_dim/dim for dim in temp.shape[:2]]))
+            #available scales above initial scaling guess 
+            scales_up = range(scaling , scaling + 3)
+            #select only values that evenly divide both dimensions
+            scales_up = [s for s in scales_up if px%s == 0 and py%s == 0]
+            if len(scales_up) > 0:
+                scaling = min(scales_up)
+            else:
+                #available scales below initial scaling guess
+                scales_down = range(2,scaling)
+                #select only values that evenly divide both dimensions
+                scales_down = [s for s in scales_down if px%s == 0 and py%s == 0]
+                if len(scales_down) > 0:
+                    scaling = max(scales_down)
+                else:
+                    raise RuntimeError('No common scaling factors found.')
+        else:
+            assert type(scaling) is int
+
+        #get new scaled image dimensions
+        fy,fx = [s/scaling for s in temp.shape[:2]]
+
+        #resize the image
+        temp = cv2.resize(temp, (fx, fy), interpolation = cv2.INTER_AREA)
+
+        return [temp, scaling]
 
     def _show_corners(self, image, corners):
         """Show chessboard corners found in image."""
@@ -164,6 +228,9 @@ class StereoCalibrator(object):
         cv2.drawChessboardCorners(temp, (self.rows, self.columns), corners,
                                   True)
         window_name = "Chessboard"
+
+        temp, scaling = self._resize_image(temp, scaling = 5)         
+
         cv2.imshow(window_name, temp)
         if cv2.waitKey(0):
             cv2.destroyWindow(window_name)
