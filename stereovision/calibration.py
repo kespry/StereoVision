@@ -112,6 +112,10 @@ class StereoCalibration(object):
         self.undistortion_map = {"left": None, "right": None}
         #: Rectification maps for remapping
         self.rectification_map = {"left": None, "right": None}
+        #: Homography matrix for projection from one camera to other
+        self.homography_mat = {"left": None, "right": None}
+        #: Homography matrix for projection from one undistorted camera image to another
+        self.undistorted_homography_mat = {"left": None, "right": None}
         if calibration:
             self._copy_calibration(calibration)
         elif input_folder:
@@ -150,17 +154,21 @@ class StereoCalibrator(object):
         """Find subpixel chessboard corners in image."""
         
         #convert image to black and white
-        temp = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        #temp = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        temp = image
 
         #if necessary, resize the image for display on screen and to reduce initial guess time
-        temp_resized, scale = self._resize_image(temp, scaling = 5)
+        temp_resized, scale = self._resize_image(temp)
 
         #use quick check of image corners to get initial guess
         ret, corners = cv2.findChessboardCorners(temp_resized,
                                                  (self.rows, self.columns), None, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
         + cv2.CALIB_CB_FAST_CHECK)
         if not ret:
-            raise ChessboardNotFoundError("No chessboard could be found.")
+            ret, corners = cv2.findChessboardCorners(temp_resized,
+                                                 (self.rows, self.columns), None, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE)            
+            if not ret:
+                raise ChessboardNotFoundError("No chessboard could be found.")
 
         #rescale corners using applied resizing scale
         corners = corners*scale #[c*scale for c in corners]
@@ -171,7 +179,7 @@ class StereoCalibrator(object):
                           30, 0.01))
         return corners
 
-    def _resize_image(self, image, scaling = None, max_pix_dim = 800):
+    def _resize_image(self, image, scaling = 1, target_pix_dim = 800.0):
         """
         Resize image to a smaller size based on max_pix_dim
         (max number of pixels in any dimension)
@@ -180,42 +188,17 @@ class StereoCalibrator(object):
         #get x and y dimensions of the image
         px, py = temp.shape[:2]
 
-        #check if the image is already small enough
-        if max(px,py) < max_pix_dim:
+        #check if the image is already close enough to target dim
+        if abs(max(px,py) - target_pix_dim) < 100:
             #if the image doesn't need any scaling, return it unmodified
-            return temp
-
-        #check that the dimensions aren't prime numbers or something
-        max_scaling = gcd(px,py)
-        if max_scaling < 2:
-            print('WARNING: Cannot scale images. GCD of x and y pixel dimensions is 1.')
-            return temp
-
-        #reduce scale to something that actually fits on the screen...
-        #find scaling factor closest to initial guess that evenly divides
-        #both px and py
-        if scaling is None:
-            scaling = int(max([max_pix_dim/dim for dim in temp.shape[:2]]))
-            #available scales above initial scaling guess 
-            scales_up = range(scaling , scaling + 3)
-            #select only values that evenly divide both dimensions
-            scales_up = [s for s in scales_up if px%s == 0 and py%s == 0]
-            if len(scales_up) > 0:
-                scaling = min(scales_up)
-            else:
-                #available scales below initial scaling guess
-                scales_down = range(2,scaling)
-                #select only values that evenly divide both dimensions
-                scales_down = [s for s in scales_down if px%s == 0 and py%s == 0]
-                if len(scales_down) > 0:
-                    scaling = max(scales_down)
-                else:
-                    raise RuntimeError('No common scaling factors found.')
+            return [temp, scaling]
         else:
-            assert type(scaling) is int
-
+            scaling = max(px, py)/800.0
+        
         #get new scaled image dimensions
-        fy,fx = [s/scaling for s in temp.shape[:2]]
+        #it's ok if it gets slightly warped since this is only used
+        #for display purposes and finding the initial chessboard guess
+        fy,fx = [int(s/scaling) for s in temp.shape[:2]]
 
         #resize the image
         temp = cv2.resize(temp, (fx, fy), interpolation = cv2.INTER_AREA)
@@ -229,7 +212,7 @@ class StereoCalibrator(object):
                                   True)
         window_name = "Chessboard"
 
-        temp, scaling = self._resize_image(temp, scaling = 5)         
+        temp, scaling = self._resize_image(temp)         
 
         cv2.imshow(window_name, temp)
         if cv2.waitKey(0):
@@ -264,8 +247,9 @@ class StereoCalibrator(object):
         #: Array of found corner coordinates from calibration images for left
         #: and right camera, respectively
         self.image_points = {"left": [], "right": []}
+        self.undistorted_image_points = {'left': [], 'right': []}
 
-    def add_corners(self, image_pair, show_results=False):
+    def add_corners(self, image_pair, show_results=False, undistorted = False):
         """
         Record chessboard corners found in an image pair.
 
@@ -278,7 +262,11 @@ class StereoCalibrator(object):
             corners = self._get_corners(image)
             if show_results:
                 self._show_corners(image, corners)
-            self.image_points[side].append(corners.reshape(-1, 2))
+
+            if undistorted:
+                self.undistorted_image_points[side].append(corners.reshape(-1,2))
+            else:
+                self.image_points[side].append(corners.reshape(-1, 2))
             side = "right"
             self.image_count += 1
 
@@ -334,7 +322,35 @@ class StereoCalibrator(object):
                                               [0, -1, 0, 0.5 * height],
                                               [0, 0, 0, -focal_length],
                                               [0, 0, 1, 0]])
+
+        #calculate the Homography matrix from src image to dest image
+        #perform and store for both left to right and right to left
+        for side in (('left', 'right'),('right', 'left')):
+            src = side[0]
+            dest = side[1]
+            calib.homography_mat[src] = self.returnHomographyMatrix(self.image_points, src_key = src, dest_key = dest)
+
         return calib
+
+    def returnHomographyMatrix(self, image_points, src_key = 'right', dest_key = 'left'):
+        '''
+        Return homography matrix warping pixels from src image to dest image.
+        Use later with cv2.warpPerspective to overlay images.
+        Default args assume left image is the destination.
+        Pixels outside of radius of ransacReprojThreshold (in pixels)
+        are considered outliers and ignored during computation.
+        '''
+        #concatenate all lists of points
+        src_points = np.vstack(image_points[src_key])
+        dest_points = np.vstack(image_points[dest_key])
+
+        h, mask = cv2.findHomography(src_points, dest_points)#,
+            #cv2.CV_RANSAC, 8)
+
+        if len(h) == 0:
+            raise RuntimeError('Could not calculate homography matrix for src = {0} and dest = {1}'.format(src_key, dest_key))
+
+        return h
 
     def check_calibration(self, calibration):
         """

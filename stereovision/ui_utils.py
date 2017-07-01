@@ -90,6 +90,7 @@ def calibrate_folder(args):
         output_folder: Folder to write calibration to
     """
     height, width = cv2.imread(args.input_files[0]).shape[:2]
+    input_files = args.input_files[:] #create a copy of this list since it's used twice (destructively)
     calibrator = StereoCalibrator(args.rows, args.columns, args.square_size,
                                   (width, height))
     progress = ProgressBar(maxval=len(args.input_files),
@@ -99,7 +100,9 @@ def calibrate_folder(args):
     progress.start()
     while args.input_files:
         left, right = args.input_files[:2]
-        img_left, im_right = cv2.imread(left), cv2.imread(right)
+        print('left: {}'.format(left), 'right: {}'.format(right))
+        #import images for left and right as grayscale
+        img_left, im_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
         calibrator.add_corners((img_left, im_right),
                                show_results=args.show_chessboards)
         args.input_files = args.input_files[2:]
@@ -112,6 +115,32 @@ def calibrate_folder(args):
     print("The average error between chessboard points and their epipolar "
           "lines is \n"
           "{} pixels. This should be as small as possible.".format(avg_error))
+
+
+    progress = ProgressBar(maxval=len(input_files),
+                          widgets=[Bar("=", "[", "]"),
+                          " ", Percentage()])
+    print("Undistorting images per calibration results.")
+    progress.start()
+    while input_files:
+        left, right = input_files[:2]
+        #import images for left and right as grayscale
+        img_left, img_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+        #undistort left and right images
+        undistorted_left = cv2.undistort(img_left, calibration.cam_mats['left'], calibration.dist_coefs['left'])
+        undistorted_right = cv2.undistort(img_right, calibration.cam_mats['right'], calibration.dist_coefs['left'])
+
+        #find chessboard corners in undistorted images
+        calibrator.add_corners((img_left, im_right),
+                               show_results=args.show_chessboards, undistorted = True)
+        input_files = input_files[2:]
+        progress.update(progress.maxval - len(input_files))
+
+    print('Calculating undistorted homography matrices.')
+    calibration.undistorted_homography_mat['left'] = calibrator.returnHomographyMatrix(calibrator.undistorted_image_points, src_key = 'left', dest_key = 'right')
+    calibration.undistorted_homography_mat['right'] = calibrator.returnHomographyMatrix(calibrator.undistorted_image_points, src_key = 'right', dest_key = 'left')
+
+
     calibration.export(args.output_folder)
 
 
