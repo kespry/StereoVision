@@ -47,9 +47,11 @@ First, some setup is required:
  2. ```source activate ThermalConvert```
  
 With the environment set, run the following command:
+
 ```bash python thermal_tiff_converter.py source_tiff_folder show_images```
  
 ```bash source_tiff_folder``` is the full path of the folder containing the images to be reprocessed
+
 ```bash show_images``` (optional) is a boolean that may be set to True to display each image as it is processed
  
 Example command:
