@@ -39,7 +39,7 @@ start_directory = os.getcwd()
 #and set show_images flag
 varargin = sys.argv[1:]
 nargs = len(sys.argv)
-if nargs<1:
+if nargs < 1:
 	raise RuntimeError('Required location of source image folder was not supplied.')
 elif nargs > 1:
 	show_images = varargin[1]
@@ -103,7 +103,7 @@ for f in jpg_files:
 		resized_img = cv2.resize(img, (fx, fy), interpolation = cv2.INTER_AREA)
 
 		title = f + ' before denoising'
-		cv2.imshow(, img)
+		cv2.imshow(title , resized_img)
 		if cv2.waitKey(0):
 			cv2.destroyWindow(f)
 
