@@ -103,6 +103,12 @@ def calibrate_folder(args):
         print('left: {}'.format(left), 'right: {}'.format(right))
         #import images for left and right as grayscale
         img_left, im_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+
+        if calibrator.image_shapes['left'] is None or calibrator.image_shapes['right'] is None:
+            #set shape of images used to calibrate
+            calibrator.image_shapes['left'] = img_left.shape
+            calibrator.image_shapes['right'] = im_right.shape
+
         calibrator.add_corners((img_left, im_right),
                                show_results=args.show_chessboards)
         args.input_files = args.input_files[2:]

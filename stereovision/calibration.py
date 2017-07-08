@@ -116,6 +116,9 @@ class StereoCalibration(object):
         self.homography_mat = {"left": None, "right": None}
         #: Homography matrix for projection from one undistorted camera image to another
         self.undistorted_homography_mat = {"left": None, "right": None}
+        #: Image sizes for left and right images
+        self.calibrationImgShape = None
+
         if calibration:
             self._copy_calibration(calibration)
         elif input_folder:
@@ -236,6 +239,10 @@ class StereoCalibrator(object):
         self.square_size = square_size
         #: Size of calibration images in pixels
         self.image_size = image_size
+
+        #size of left and right images used to stereocalibrate
+        self.image_shapes = {'left': None, 'right': None}
+
         pattern_size = (self.rows, self.columns)
         corner_coordinates = np.zeros((np.prod(pattern_size), 3), np.float32)
         corner_coordinates[:, :2] = np.indices(pattern_size).T.reshape(-1, 2)
@@ -322,6 +329,9 @@ class StereoCalibrator(object):
                                               [0, -1, 0, 0.5 * height],
                                               [0, 0, 0, -focal_length],
                                               [0, 0, 1, 0]])
+
+        #pass size of images used to calibrate to the calib object
+        calib.calibrationImgShape = self.image_shapes
 
         #calculate the Homography matrix from src image to dest image
         #perform and store for both left to right and right to left
