@@ -66,7 +66,7 @@ for f in files:
         print('Converting file: {}'.format(file))
         #therm_tiff = Image.open(file)
         therm_tiff = np.fromfile(file, dtype=np.uint16)
-        np.reshape(therm_tiff,(256,320))
+        therm_tiff = np.reshape(therm_tiff,(256,320))
 
         #convert to numpy array with same dimensions
         #therm_tiff = np.array(therm_tiff)#, dtype = np.float_)
@@ -81,7 +81,7 @@ for f in files:
         #therm_array = np.invert(therm_array)
 
         #new image file name
-        new_file = '{0}/{1}.jpg'.format(folder, f[:-4])
+        new_file = '{0}.jpg'.format(f[:-4])
         #save image
         plt.imsave(fname = new_file, arr = therm_array)
 
