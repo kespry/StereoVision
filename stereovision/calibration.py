@@ -168,10 +168,12 @@ class StereoCalibrator(object):
                                                  (self.rows, self.columns), None, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
         + cv2.CALIB_CB_FAST_CHECK)
         if not ret:
+            #try without fast check flag
             ret, corners = cv2.findChessboardCorners(temp_resized,
-                                                 (self.rows, self.columns), None, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE)            
+                                                 (self.rows, self.columns), None, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE)
             if not ret:
-                raise ChessboardNotFoundError("No chessboard could be found.")
+                #no corners found
+                return None
 
         #rescale corners using applied resizing scale
         corners = corners*scale #[c*scale for c in corners]
@@ -255,6 +257,8 @@ class StereoCalibrator(object):
         #: and right camera, respectively
         self.image_points = {"left": [], "right": []}
         self.undistorted_image_points = {'left': [], 'right': []}
+        #: List to record image pairs that weren't able to be used
+        self.bad_images = []
 
     def add_corners(self, image_pair, show_results=False, undistorted = False):
         """
@@ -264,18 +268,38 @@ class StereoCalibrator(object):
         (left, right).
         """
         side = "left"
-        self.object_points.append(self.corner_coordinates)
+        status = [] #return status
+        image_points = {'left':None, 'right':None} #store until both images confirmed good
         for image in image_pair:
             corners = self._get_corners(image)
-            if show_results:
-                self._show_corners(image, corners)
 
-            if undistorted:
-                self.undistorted_image_points[side].append(corners.reshape(-1,2))
+            if corners is None or len(status)!=0:
+                #no corners were found
+                #return error info in form of 
+                #append failed side to return status message
+                status.append(side)
             else:
-                self.image_points[side].append(corners.reshape(-1, 2))
+                #if corners found in this image and no error in prior image in pair
+                image_points[side] = corners.reshape(-1,2)
+
+                if show_results:
+                    self._show_corners(image, corners)
+
             side = "right"
+
+        if len(status) == 0:
+            #if we found corners in both images,
+            #append to list of image points for calibration
+            for s in ['left', 'right']:
+                if undistorted:
+                    self.undistorted_image_points[s].append(image_points[s])
+                else:
+                    self.image_points[s].append(image_points[s])
+
+            self.object_points.append(self.corner_coordinates)
             self.image_count += 1
+
+        return status
 
     def calibrate_cameras(self):
         """Calibrate cameras based on found chessboard corners."""
@@ -351,6 +375,7 @@ class StereoCalibrator(object):
         are considered outliers and ignored during computation.
         '''
         #concatenate all lists of points
+        print(image_points[src_key])
         src_points = np.vstack(image_points[src_key])
         dest_points = np.vstack(image_points[dest_key])
 

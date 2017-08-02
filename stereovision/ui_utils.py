@@ -109,19 +109,32 @@ def calibrate_folder(args):
             calibrator.image_shapes['left'] = img_left.shape
             calibrator.image_shapes['right'] = im_right.shape
 
-        calibrator.add_corners((img_left, im_right),
+        ret = calibrator.add_corners((img_left, im_right),
                                show_results=args.show_chessboards)
+
+        if len(ret) != 0:
+            #add corners failed to find chessboard corners in at least one image
+            print('Bad image pair. Ignoring.\n')
+            if 'left' in ret:
+                calibrator.bad_images.append(left)
+            if 'right' in ret:
+                calibrator.bad_images.append(right)
+
         args.input_files = args.input_files[2:]
         progress.update(progress.maxval - len(args.input_files))
 
     progress.finish()
+
+    if len(calibrator.bad_images) != 0:
+        print('Unable to find chessboard corners on:\n{0}'.format('\n'.join(calibrator.bad_images)))
+        print('These images and the corresponding image in the stereo pair will be ignored in the calibration.\n')
+
     print("Calibrating cameras. This can take a while.")
     calibration = calibrator.calibrate_cameras()
     avg_error = calibrator.check_calibration(calibration)
     print("The average error between chessboard points and their epipolar "
           "lines is \n"
           "{} pixels. This should be as small as possible.".format(avg_error))
-
 
     progress = ProgressBar(maxval=len(input_files),
                           widgets=[Bar("=", "[", "]"),
@@ -140,7 +153,6 @@ def calibrate_folder(args):
         calibrator.add_corners((img_left, im_right),
                                show_results=args.show_chessboards, undistorted = True)
         input_files = input_files[2:]
-        progress.update(progress.maxval - len(input_files))
 
     print('Calculating undistorted homography matrices.')
     calibration.undistorted_homography_mat['left'] = calibrator.returnHomographyMatrix(calibrator.undistorted_image_points, src_key = 'left', dest_key = 'right')
