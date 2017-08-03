@@ -154,6 +154,8 @@ def calibrate_folder(args):
                                show_results=args.show_chessboards, undistorted = True)
         input_files = input_files[2:]
 
+        progress.update(progress.maxval - len(input_files))
+
     print('Calculating undistorted homography matrices.')
     calibration.undistorted_homography_mat['left'] = calibrator.returnHomographyMatrix(calibrator.undistorted_image_points, src_key = 'left', dest_key = 'right')
     calibration.undistorted_homography_mat['right'] = calibrator.returnHomographyMatrix(calibrator.undistorted_image_points, src_key = 'right', dest_key = 'left')

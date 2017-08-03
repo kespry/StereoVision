@@ -16,111 +16,87 @@ show_images is either True or False (True will show modified images before final
 Modified files are saved to the source images folder.
 '''
 
-from PIL import Image
+from PIL import Image, TiffTags
 import cv2, os, sys
+from argparse import ArgumentParser
 import numpy as np
 from matplotlib import pyplot as plt
 
 def rescale_tiff(nparray):
-	#set bounds of rescaling based on min and max values
-	#in the entire image
-	arrmax = np.max(nparray)
-	arrmin = np.min(nparray)
+    #set bounds of rescaling based on min and max values
+    #in the entire image
+    arrmax = np.max(nparray)
+    arrmin = np.min(nparray)
 
-	#rescale the values for each pixel
-	out = (nparray-arrmin)*255.0/(arrmax-arrmin)
+    #rescale the values for each pixel
+    out = (nparray-arrmin)*255.0/(arrmax-arrmin)
 
-	return out.astype(np.uint8)
+    return out.astype(np.uint8)
 
-show_images = True
-start_directory = os.getcwd()
+#Command line arguments for function
+parser = ArgumentParser(description = 'Preprocess thermal calibration images to increase contrast for checkerboard finding.')
+parser.add_argument('--folder', help = 'Folder where unprocessed images are stored. All images in this folder will be processed.'
+                                     'These are expected in a format readable by cv2.imread().'
+                                     'Output processed images will be saved with same file name'
+                                     'in same folder unless otherwise specified with "suffix" argument.')
+parser.add_argument('--suffix', help = 'Suffix to add to file names of processed images.', default = '')
+parser.add_argument('--display_images', help = 'Display the images as they are processed.', action = 'store_true')
+parser.add_argument('--do_not_save', help = 'Do not save the results of image preprocessing (just a test run).', action = 'store_false')
+args = parser.parse_args()
 
-#read the destination/source folders from command line
-#and set show_images flag
-varargin = sys.argv[1:]
-nargs = len(sys.argv)
-if nargs < 1:
-	raise RuntimeError('Required location of source image folder was not supplied.')
-elif nargs > 1:
-	show_images = varargin[1]
-
-folder = varargin[0]
-
-#Discover tiff files and save as grayscale jpgs.
-files = os.listdir(folder)
+#Discover thermal tiff files to iterate over
+files = os.listdir(args.folder)
 new_files = []
 for f in files:
-	if f[-5:] == '.tiff':
-		new_files.append(f)
+    if f.split('.')[-1] in ['tiff', 'tif', 'jpg', 'jpeg', 'png']:
+        new_files.append(f)
 files = new_files
 
-jpg_files = []
+print('Files to be preprocessed:\n')
+print('\n'.join(files))
+
+tmp = input('\nPress any button to proceed with processing.')
 
 for f in files:
-	if f[-5:] == '.tiff':
-		file = folder + '/' + f
-		print('Converting file: {}'.format(file))
-		therm_tiff = Image.open(file)
-		
-		#convert to numpy array with same dimensions
-		therm_tiff = np.array(therm_tiff, dtype = np.float_)
+    file = args.folder + '/' + f
+    print('Reading file: {0}'.format(file))
 
-		
-		#rescale images to 0-255 scale and invert
-		therm_array = rescale_tiff(therm_tiff)
-		therm_array = np.invert(therm_array)
+    therm = cv2.imread(file, 0)
 
-		#new image file name
-		new_file = '{0}/{1}.jpg'.format(folder, f[:-5])
-		#save image
-		plt.imsave(fname = new_file, arr = therm_array)
+    #rescale images to 0-255 scale and invert
+    therm = rescale_tiff(therm)
+    therm = np.invert(therm)
 
-		jpg_files.append(new_file)
+    #display the imported image before denoising
+    if args.display_images:
+        #resize to fit on screen
+        scaling = therm.shape[0]/800.0
+        fy,fx = [int(s/scaling) for s in therm.shape[:2]]
+        resized_img = cv2.resize(therm, (fx, fy), interpolation = cv2.INTER_AREA)
 
-#convert size of new jpgs to larger format
-print('Resizing jpgs by 900%.')
+        title = f + ' before denoising'
+        cv2.imshow(title , resized_img)
+        if cv2.waitKey(0):
+            cv2.destroyWindow(title)
 
-#change directory for magick to work
-os.chdir(folder)
+    #denoise the image
+    print('Denoising and thresholding image. This may take a while.')
+    therm = cv2.fastNlMeansDenoising(therm, None, 10, 11, 71)
 
-#resize the jpg in place
-os.system('magick mogrify -resize 900% *.jpg')
+    #use an adaptive threshold to increase the contrast of the checkerboard
+    therm = cv2.adaptiveThreshold(therm, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 75,2)
 
-#move back to start directory
-os.chdir(start_directory)
+    if args.display_images:
+        #resize to fit on screen
+        resized_img = cv2.resize(therm, (fx, fy), interpolation = cv2.INTER_AREA)
 
-print('Resizing complete.')
+        #display converted image
+        title = f + ' after denoising'
+        cv2.imshow(title, resized_img)
+        if cv2.waitKey(0):
+            cv2.destroyWindow(title)
 
-for f in jpg_files:
-	print('Reading ', f)
-	#open jpg
-	img = cv2.imread(f, 0)
-
-	if show_images:
-		#resize to fit on screen
-		scaling = img.shape[0]/800.0
-		fy,fx = [int(s/scaling) for s in img.shape[:2]]
-		resized_img = cv2.resize(img, (fx, fy), interpolation = cv2.INTER_AREA)
-
-		title = f + ' before denoising'
-		cv2.imshow(title , resized_img)
-		if cv2.waitKey(0):
-			cv2.destroyWindow(f)
-
-	#denoise the image
-	print('Denoising image. This may take a while.')
-	img = cv2.fastNlMeansDenoising(img, None, 10, 11, 71)
-
-	#use an adaptive threshold to increase the contrast of the checkerboard
-	img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 75,2)
-
-	if show_images:
-		#resize to fit on screen
-		resized_img = cv2.resize(img, (fx, fy), interpolation = cv2.INTER_AREA)
-
-		#display converted image
-		cv2.imshow(f, resized_img)
-		if cv2.waitKey(0):
-			cv2.destroyWindow(f)
-
-	cv2.imwrite(f, img)
+    if args.do_not_save:
+        new_file = '{0}/{1}{2}.jpg'.format(args.folder, f[:-5], args.suffix)
+        print('Saved processed image as {0}'.format(new_file))
+        cv2.imwrite(new_file, therm, [cv2.IMWRITE_JPEG_QUALITY, 100])
