@@ -43,7 +43,7 @@ parser.add_argument('--folder', help = 'Folder where unprocessed images are stor
                                      'in same folder unless otherwise specified with "suffix" argument.')
 parser.add_argument('--suffix', help = 'Suffix to add to file names of processed images.', default = '')
 parser.add_argument('--display_images', help = 'Display the images as they are processed.', action = 'store_true')
-parser.add_argument('--do_not_save', help = 'Do not save the results of image preprocessing (just a test run).', action = 'store_false')
+parser.add_argument('--do_not_save', help = 'Do not save the results of image preprocessing (just a test run).', action = 'store_true')
 args = parser.parse_args()
 
 #Discover thermal tiff files to iterate over
@@ -85,6 +85,16 @@ for f in files:
     print('Denoising and thresholding image. This may take a while.')
     therm = cv2.fastNlMeansDenoising(therm, None, 10, 11, 71)
 
+    #if args.display_images:
+    #    #resize to fit on screen
+    #    resized_img = cv2.resize(therm, (fx, fy), interpolation = cv2.INTER_AREA)
+
+        #display converted image
+    #    title = f + ' after denoising'
+    #    cv2.imshow(title, resized_img)
+    #    if cv2.waitKey(0):
+    #        cv2.destroyWindow(title)
+
     #use an adaptive threshold to increase the contrast of the checkerboard
     therm = cv2.adaptiveThreshold(therm, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 75,2)
 
@@ -93,12 +103,12 @@ for f in files:
         resized_img = cv2.resize(therm, (fx, fy), interpolation = cv2.INTER_AREA)
 
         #display converted image
-        title = f + ' after denoising'
+        title = f + ' after thresholding'
         cv2.imshow(title, resized_img)
         if cv2.waitKey(0):
             cv2.destroyWindow(title)
 
-    if args.do_not_save:
-        new_file = '{0}/{1}{2}.jpg'.format(args.folder, f[:-5], args.suffix)
+    if not args.do_not_save:
+        new_file = '{0}/{1}{2}.jpg'.format(args.folder, ''.join(f.split('.')[:-1]), args.suffix)
         print('Saved processed image as {0}'.format(new_file))
         cv2.imwrite(new_file, therm, [cv2.IMWRITE_JPEG_QUALITY, 100])
