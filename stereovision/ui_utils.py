@@ -39,6 +39,7 @@ Classes:
 from argparse import ArgumentParser
 from functools import partial
 import os
+import numpy as np
 
 import cv2
 from progressbar import ProgressBar, Percentage, Bar
@@ -73,7 +74,6 @@ def find_files(folder):
     files = [os.path.join(folder, filename) for filename in files]
     return files
 
-
 def calibrate_folder(args):
     """
     Calibrate camera based on chessboard images, write results to output folder.
@@ -90,9 +90,9 @@ def calibrate_folder(args):
         output_folder: Folder to write calibration to
     """
     height, width = cv2.imread(args.input_files[0]).shape[:2]
-    input_files = args.input_files[:] #create a copy of this list since it's used twice (destructively)
     calibrator = StereoCalibrator(args.rows, args.columns, args.square_size,
                                   (width, height))
+    good_images = [] #list to keep track of images used in the calibration
     progress = ProgressBar(maxval=len(args.input_files),
                           widgets=[Bar("=", "[", "]"),
                           " ", Percentage()])
@@ -112,13 +112,13 @@ def calibrate_folder(args):
         ret = calibrator.add_corners((img_left, im_right),
                                show_results=args.show_chessboards)
 
-        if len(ret) != 0:
-            #add corners failed to find chessboard corners in at least one image
+        if ret:
+            #successfully found corners
+            calibrator.good_images.extend([left,right])
+        else:
+            #corners not found
             print('Bad image pair. Ignoring.\n')
-            if 'left' in ret:
-                calibrator.bad_images.append(left)
-            if 'right' in ret:
-                calibrator.bad_images.append(right)
+            calibrator.bad_images.extend([left,right])
 
         args.input_files = args.input_files[2:]
         progress.update(progress.maxval - len(args.input_files))
@@ -126,7 +126,8 @@ def calibrate_folder(args):
     progress.finish()
 
     if len(calibrator.bad_images) != 0:
-        print('Unable to find chessboard corners on:\n{0}'.format('\n'.join(calibrator.bad_images)))
+        print('Unable to find chessboard corners in {1} image pairs:\n{0}'.format('\n'.join(calibrator.bad_images),
+                                                                                  len(calibrator.bad_images)/2))
         print('These images and the corresponding image in the stereo pair will be ignored in the calibration.\n')
 
     print("Calibrating cameras. This can take a while.")
@@ -136,33 +137,12 @@ def calibrate_folder(args):
           "lines is \n"
           "{} pixels. This should be as small as possible.".format(avg_error))
 
-    progress = ProgressBar(maxval=len(input_files),
-                          widgets=[Bar("=", "[", "]"),
-                          " ", Percentage()])
-    print("Undistorting images per calibration results.")
-    progress.start()
-    while input_files:
-        left, right = input_files[:2]
-        #import images for left and right as grayscale
-        img_left, img_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
-        #undistort left and right images
-        undistorted_left = cv2.undistort(img_left, calibration.cam_mats['left'], calibration.dist_coefs['left'])
-        undistorted_right = cv2.undistort(img_right, calibration.cam_mats['right'], calibration.dist_coefs['left'])
+    if args.validate_results:
+        calibrator.overlay_corners(calibration)
 
-        #find chessboard corners in undistorted images
-        calibrator.add_corners((img_left, im_right),
-                               show_results=args.show_chessboards, undistorted = True)
-        input_files = input_files[2:]
-
-        progress.update(progress.maxval - len(input_files))
-
-    print('Calculating undistorted homography matrices.')
-    calibration.undistorted_homography_mat['left'] = calibrator.returnHomographyMatrix(calibrator.undistorted_image_points, src_key = 'left', dest_key = 'right')
-    calibration.undistorted_homography_mat['right'] = calibrator.returnHomographyMatrix(calibrator.undistorted_image_points, src_key = 'right', dest_key = 'left')
-
+        calibrator.overlay_calibration_images(calibration)
 
     calibration.export(args.output_folder)
-
 
 class BMTuner(object):
 

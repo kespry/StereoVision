@@ -24,7 +24,6 @@ from argparse import ArgumentParser
 from stereovision.ui_utils import (find_files, calibrate_folder,
                                   CHESSBOARD_ARGUMENTS)
 
-
 def main():
     """
     Read all images in input folder and produce camera calibration files.
@@ -45,12 +44,13 @@ def main():
                         "files to.", default="/tmp/")
     parser.add_argument("--show-chessboards", help="Display detected "
                         "chessboard corners.", action="store_true")
+    parser.add_argument("--validate-results", help="Display reprojected points"
+                        "and chessboards using homography matrix.", action="store_true")
     args = parser.parse_args()
 
     print args.input_folder
     args.input_files = find_files(args.input_folder)
     calibrate_folder(args)
-
 
 if __name__ == "__main__":
     main()

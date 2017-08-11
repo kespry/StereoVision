@@ -26,10 +26,8 @@ Classes:
 .. image:: classes_calibration.svg
 """
 
-import os
-from fractions import gcd
-import cv2
-
+import os, cv2
+from progressbar import ProgressBar, Percentage, Bar
 import numpy as np
 from stereovision.exceptions import ChessboardNotFoundError
 
@@ -257,8 +255,10 @@ class StereoCalibrator(object):
         #: and right camera, respectively
         self.image_points = {"left": [], "right": []}
         self.undistorted_image_points = {'left': [], 'right': []}
-        #: List to record image pairs that weren't able to be used
+        #: List to record image pairs that weren't able to be used in calibration
         self.bad_images = []
+        #: List to record image pairs that were able to be used in calibration
+        self.good_images = []
 
     def add_corners(self, image_pair, show_results=False, undistorted = False):
         """
@@ -268,16 +268,17 @@ class StereoCalibrator(object):
         (left, right).
         """
         side = "left"
-        status = [] #return status
+        good_pair = True #track if corners found in both images
         image_points = {'left':None, 'right':None} #store until both images confirmed good
         for image in image_pair:
             corners = self._get_corners(image)
 
-            if corners is None or len(status)!=0:
+            if corners is None:
                 #no corners were found
                 #return error info in form of 
                 #append failed side to return status message
-                status.append(side)
+                good_pair = False
+                break
             else:
                 #if corners found in this image and no error in prior image in pair
                 image_points[side] = corners.reshape(-1,2)
@@ -287,7 +288,7 @@ class StereoCalibrator(object):
 
             side = "right"
 
-        if len(status) == 0:
+        if good_pair:
             #if we found corners in both images,
             #append to list of image points for calibration
             for s in ['left', 'right']:
@@ -299,7 +300,7 @@ class StereoCalibrator(object):
             self.object_points.append(self.corner_coordinates)
             self.image_count += 1
 
-        return status
+        return good_pair
 
     def calibrate_cameras(self):
         """Calibrate cameras based on found chessboard corners."""
@@ -375,7 +376,6 @@ class StereoCalibrator(object):
         are considered outliers and ignored during computation.
         '''
         #concatenate all lists of points
-        print(image_points[src_key])
         src_points = np.vstack(image_points[src_key])
         dest_points = np.vstack(image_points[dest_key])
 
@@ -421,3 +421,73 @@ class StereoCalibrator(object):
             other_side, this_side = sides
         total_points = self.image_count * len(self.object_points)
         return total_error / total_points
+
+    def overlay_corners(self, calibration):
+        #reproject all points using homography matrix
+        left_shape = self.image_shapes['left']
+        right_shape = self.image_shapes['right']
+        left = np.ones(left_shape, np.uint8)*255
+        right = np.zeros(right_shape, np.uint8)*255
+        left = np.repeat(left[:,:,np.newaxis], 3, axis=2)
+        right = np.repeat(right[:,:,np.newaxis], 3, axis=2)
+        left_points = np.concatenate(self.image_points['left'])
+        right_points = np.concatenate(self.image_points['right'])
+
+        for p in left_points:
+            cv2.circle(left, tuple(p), 50, (255,0,0), thickness = 3)
+        for p in right_points:
+            cv2.circle(right, tuple(p), 50, (0,255,0), thickness = 3)
+
+        #project right points to left image frame
+        warped_right = cv2.warpPerspective(right, calibration.homography_mat['right'], (left.shape[1], left.shape[0]))
+
+        #combine left and right image points into single image
+        combined = cv2.addWeighted(left, 1, warped_right, 1, 0)
+
+        #resize to fit on the screen
+        scale = 1000./combined.shape[1]
+        dims = (int(combined.shape[1]*scale), int(combined.shape[0]*scale))
+        stacked = cv2.resize(combined, dims)
+
+        cv2.imshow('All Image Points In Left Image Frame', stacked)
+        if cv2.waitKey(0):
+            cv2.destroyWindow('All Points')
+
+    def overlay_calibration_images(self,calibration):
+
+        progress = ProgressBar(maxval=len(self.good_images),
+                          widgets=[Bar("=", "[", "]"),
+                          " ", Percentage()])
+        print('Overlaying right images onto left images.')
+        progress.start()
+
+        i=0
+        while i < len(self.good_images):
+            left, right = self.good_images[i:i+2]
+
+            img_left, img_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+
+            #convert raw array to float64 type due to odd bug in warp perspective
+            projected_right = cv2.warpPerspective(img_right.astype(np.float_),
+                calibration.homography_mat['right'],
+                (img_left.shape[1],img_left.shape[0]))
+            projected_right = projected_right.astype(np.uint8)
+
+            #overlay left and right image
+            overlaid_image = cv2.addWeighted(img_left, 0.5,
+                projected_right, 0.5, 0)
+
+            #resize for the screen
+            scale = 1000./overlaid_image.shape[1]
+            dims = (int(overlaid_image.shape[1]*scale), int(overlaid_image.shape[0]*scale))
+            overlaid_image = cv2.resize(overlaid_image, dims)
+
+            cv2.imshow('Overlay: {0}'.format(left), overlaid_image)
+            if cv2.waitKey(0):
+                cv2.destroyWindow('Overlay: {0}'.format(left))
+
+            i += 2
+
+            progress.update(i)
+
+        progress.finish()
