@@ -89,9 +89,7 @@ def calibrate_folder(args):
         square_size: Size of chessboard squares in cm
         output_folder: Folder to write calibration to
     """
-    height, width = cv2.imread(args.input_files[0]).shape[:2]
-    calibrator = StereoCalibrator(args.rows, args.columns, args.square_size,
-                                  (width, height))
+    calibrator = StereoCalibrator(args.rows, args.columns, args.square_size)
     good_images = [] #list to keep track of images used in the calibration
     progress = ProgressBar(maxval=len(args.input_files),
                           widgets=[Bar("=", "[", "]"),
@@ -102,7 +100,8 @@ def calibrate_folder(args):
         left, right = args.input_files[:2]
         print('left: {}'.format(left), 'right: {}'.format(right))
         #import images for left and right as grayscale
-        img_left, im_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+        #img_left, im_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+        img_left, im_right = calibrator.read_JPG_ignoring_orientation(left), calibrator.read_JPG_ignoring_orientation(right)
 
         if calibrator.image_shapes['left'] is None or calibrator.image_shapes['right'] is None:
             #set shape of images used to calibrate

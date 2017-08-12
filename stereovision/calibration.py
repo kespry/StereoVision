@@ -27,6 +27,7 @@ Classes:
 """
 
 import os, cv2
+from PIL import Image
 from progressbar import ProgressBar, Percentage, Bar
 import numpy as np
 from stereovision.exceptions import ChessboardNotFoundError
@@ -221,7 +222,7 @@ class StereoCalibrator(object):
         if cv2.waitKey(0):
             cv2.destroyWindow(window_name)
 
-    def __init__(self, rows, columns, square_size, image_size):
+    def __init__(self, rows, columns, square_size):
         """
         Store variables relevant to the camera calibration.
 
@@ -238,7 +239,7 @@ class StereoCalibrator(object):
         #: Size of chessboard squares in cm
         self.square_size = square_size
         #: Size of calibration images in pixels
-        self.image_size = image_size
+        self.image_size = None
 
         #size of left and right images used to stereocalibrate
         self.image_shapes = {'left': None, 'right': None}
@@ -267,6 +268,10 @@ class StereoCalibrator(object):
         The image pair should be an iterable composed of two CvMats ordered
         (left, right).
         """
+        if self.image_size == None:
+            (height, width) = image_pair[0].shape
+            self.image_size = (width, height)
+
         side = "left"
         good_pair = True #track if corners found in both images
         image_points = {'left':None, 'right':None} #store until both images confirmed good
@@ -301,6 +306,55 @@ class StereoCalibrator(object):
             self.image_count += 1
 
         return good_pair
+
+    def _returnJPGorientation(self, file):
+        #return exif orientation information
+        orientation_key = 274
+        img = Image.open(file)
+
+        try:
+            orientation = img._getexif()[orientation_key]
+        except:
+            orientation = None
+
+        return orientation
+
+    def read_JPG_ignoring_orientation(self, file):
+        #read image using cv2.imread()
+        #reverse any orientation compensation to return
+        #image with unmodified orientation
+
+        img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+        orientation = self._returnJPGorientation(file)
+
+        if orientation == 2:
+            #horizontal flip
+            img = np.fliplr(img)
+        elif orientation == 3 or orientation == 8:
+            #rotate 180 deg
+            img = ndimage.rotate(img, 180)
+        elif orientation == 4:
+            #flip vertically
+            img = np.flipud(img)
+        elif orientation == 5:
+            #flip horizontally
+            #then rotate 90 deg CCW
+            img = np.flipud(img)
+            img = ndimage.rotate(img, 90)
+        elif orientation == 6:
+            #rotate 90 deg CCW
+            img = ndimage.rotate(img, 90)
+        elif orientation == 7:
+            #flip horizontal
+            #then rotate 90 deg CW
+            img = np.fliplr(img)
+            img = ndimage.rotate(img, -90)
+
+        #if none of these orientations
+        #either orientation is not defined in exif
+        #or it is 1, in which case we don't modify it
+
+        return img
 
     def calibrate_cameras(self):
         """Calibrate cameras based on found chessboard corners."""
@@ -465,7 +519,8 @@ class StereoCalibrator(object):
         while i < len(self.good_images):
             left, right = self.good_images[i:i+2]
 
-            img_left, img_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+            #img_left, img_right = cv2.imread(left, cv2.CV_LOAD_IMAGE_GRAYSCALE), cv2.imread(right, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+            img_left, img_right = self.read_JPG_ignoring_orientation(left), self.read_JPG_ignoring_orientation(right)
 
             #convert raw array to float64 type due to odd bug in warp perspective
             projected_right = cv2.warpPerspective(img_right.astype(np.float_),
