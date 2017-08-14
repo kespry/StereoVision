@@ -319,20 +319,46 @@ class StereoCalibrator(object):
 
         return orientation
 
+    def _rotate90(self, img, n):
+        ##rotate image 90 degrees CCW n times
+
+        assert(type(n) is int)
+        assert(n > 0)
+
+        n = n%4
+
+        #create indices to transpose array
+        #i.e. don't make nxmx3 RGB array into 3xmxn array 
+        indices = [i for i in range(len(img.shape))]
+        indices[0], indices[1] = indices[1], indices[0]
+        indices = tuple(indices)
+
+        if n == 1:
+            #rotate 90 deg CCW by transposing, then flipping
+            img = np.flipud(np.transpose(img, axes = indices))
+        elif n == 2:
+            #rotate 180 degrees CCW
+            img = np.flipud(np.fliplr(img))
+        elif n == 3:
+            #rotate 270 degrees CCW
+            #by flipping vertically, then transposing
+            img = np.transpose(np.flipud(img), axes = indices)
+
+        return img
+
     def read_JPG_ignoring_orientation(self, file):
         #read image using cv2.imread()
         #reverse any orientation compensation to return
         #image with unmodified orientation
 
-        img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
-        orientation = self._returnJPGorientation(file)
-
+        if orientation is None or orientation == 1:
+            return img
         if orientation == 2:
             #horizontal flip
             img = np.fliplr(img)
-        elif orientation == 3 or orientation == 8:
+        if orientation == 3:
             #rotate 180 deg
-            img = ndimage.rotate(img, 180)
+            img = self._rotate90(img, 2)
         elif orientation == 4:
             #flip vertically
             img = np.flipud(img)
@@ -340,19 +366,18 @@ class StereoCalibrator(object):
             #flip horizontally
             #then rotate 90 deg CCW
             img = np.flipud(img)
-            img = ndimage.rotate(img, 90)
+            img = self._rotate90(img, 1)
         elif orientation == 6:
             #rotate 90 deg CCW
-            img = ndimage.rotate(img, 90)
+            img = self._rotate90(img, 1)
         elif orientation == 7:
             #flip horizontal
             #then rotate 90 deg CW
             img = np.fliplr(img)
-            img = ndimage.rotate(img, -90)
-
-        #if none of these orientations
-        #either orientation is not defined in exif
-        #or it is 1, in which case we don't modify it
+            img = self._rotate90(img, 3)
+        elif orientation == 8:
+            #rotate 90 degrees CW
+            img = self._rotate90(img, 3)
 
         return img
 
