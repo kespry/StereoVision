@@ -365,7 +365,7 @@ class StereoCalibrator(object):
         elif orientation == 5:
             #flip horizontally
             #then rotate 90 deg CCW
-            img = np.flipud(img)
+            img = np.fliplr(img)
             img = self._rotate90(img, 1)
         elif orientation == 6:
             #rotate 90 deg CCW
