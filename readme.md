@@ -22,7 +22,7 @@ To calibrate a stereo camera setup, images must be saved in the format _left_abc
 To run a stereo camera calibration after the library is installed, use the command
 
 ```bash
-time calibrate_cameras --rows nrows --columns ncols --square-size squareSize --show-chessboards inputImageFolder outputResultsFolder
+time calibrate_cameras --rows nrows --columns ncols --square-size squareSize --show-chessboards --validate-results inputImageFolder outputResultsFolder
 ```
 
 Where:
@@ -33,7 +33,7 @@ Where:
 
 Example command for test images folder:
 ```bash
-time calibrate_cameras --rows 6 --columns 9 --square-size 5 --validate-results ../test_images/3/ ../test_images/test_set_3_results/
+time calibrate_cameras --rows 6 --columns 9 --square-size 5 --validate-results test_images/3/ test_images/test_set_3_results/
 ```
 More information about the original library can be found as published by the original author on his [blog](https://erget.wordpress.com/2014/02/28/calibrating-a-stereo-pair-with-python/).
 
@@ -67,10 +67,5 @@ python thermal_preprocessor.py --folder source_thermal_folder --suffix processed
 ```--display_images``` (optional) is a flag to display each image as it is processed
 
 ```--do_not_save``` (optional) is a flag to indicate that the processed images should not be saved.
- 
-Example command:
-```bash
-python thermal_tiff_converter.py --folder ~/tiff_folder/' --display_images
-```
 
 The processed images will be saved in the same folder as the source images with the same name (and added suffix, if applicable) as .jpg files.
