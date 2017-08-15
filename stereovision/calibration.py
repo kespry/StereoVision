@@ -351,6 +351,8 @@ class StereoCalibrator(object):
         #reverse any orientation compensation to return
         #image with unmodified orientation
 
+        orientation = self._returnJPGorientation(file)
+
         if orientation is None or orientation == 1:
             return img
         if orientation == 2:
