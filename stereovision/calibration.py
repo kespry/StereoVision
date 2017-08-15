@@ -346,12 +346,12 @@ class StereoCalibrator(object):
 
         return img
 
-    def read_JPG_ignoring_orientation(self, file):
+    def read_JPG_ignoring_orientation(self, img):
         #read image using cv2.imread()
         #reverse any orientation compensation to return
         #image with unmodified orientation
 
-        orientation = self._returnJPGorientation(file)
+        orientation = self._returnJPGorientation(img)
 
         if orientation is None or orientation == 1:
             return img
