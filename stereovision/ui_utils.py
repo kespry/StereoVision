@@ -43,8 +43,8 @@ import numpy as np
 
 import cv2
 from progressbar import ProgressBar, Percentage, Bar
-from stereovision.calibration import StereoCalibrator
-from stereovision.exceptions import BadBlockMatcherArgumentError
+from calibration import StereoCalibrator
+# from exceptions import BadBlockMatcherArgumentError
 
 #: Command line arguments for collecting information about chessboards
 CHESSBOARD_ARGUMENTS = ArgumentParser(add_help=False)

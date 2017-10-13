@@ -14,7 +14,6 @@ dependencies:
 - hdf5=1.8.18=0
 - jpeg=9b=0
 - json-c=0.12=0
-- kealib=1.4.7=2
 - krb5=1.14.2=0
 - libdap4=3.18.3=2
 - libgdal=2.2.0=0
