@@ -156,7 +156,7 @@ class StereoCalibrator(object):
         """Find subpixel chessboard corners in image."""
         
         #convert image to black and white
-        #temp = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # temp = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         temp = image
 
         #if necessary, resize the image for display on screen and to reduce initial guess time
@@ -397,11 +397,11 @@ class StereoCalibrator(object):
          calib.f_mat) = cv2.stereoCalibrate(self.object_points,
                                             self.image_points["left"],
                                             self.image_points["right"],
-                                            self.image_size,
                                             calib.cam_mats["left"],
                                             calib.dist_coefs["left"],
                                             calib.cam_mats["right"],
                                             calib.dist_coefs["right"],
+                                            self.image_size,
                                             calib.rot_mat,
                                             calib.trans_vec,
                                             calib.e_mat,

@@ -33,7 +33,7 @@ if __name__ == '__main__':
     args, img_mask = getopt.getopt(sys.argv[1:], '', ['debug=', 'square_size=', 'threads='])
     args = dict(args)
     args.setdefault('--debug', './output/')
-    args.setdefault('--square_size', 5.0)
+    args.setdefault('--square_size', 2.5)
     args.setdefault('--threads', 1)
     # if not img_mask:
     #     img_mask = '../data/left??.jpg'  # default
@@ -116,6 +116,7 @@ if __name__ == '__main__':
             continue
 
         h, w = img.shape[:2]
+        print(w,h)
         newcameramtx, roi = cv.getOptimalNewCameraMatrix(camera_matrix, dist_coefs, (w, h), 1, (w, h))
         print(newcameramtx)
         print(dist_coefs)
